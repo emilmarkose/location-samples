@@ -17,7 +17,9 @@
 package com.google.android.gms.location.sample.geofencing;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -25,14 +27,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
-import androidx.annotation.NonNull;
-import com.google.android.material.snackbar.Snackbar;
-import androidx.core.app.ActivityCompat;
-import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
@@ -41,6 +44,7 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -59,33 +63,25 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
-
-    /**
-     * Tracks whether the user requested to add or remove geofences, or to do neither.
-     */
-    private enum PendingGeofenceTask {
-        ADD, REMOVE, NONE
-    }
-
+    private EditText latInput;
+    private EditText lngInput;
+    private EditText radiusInput;
+    private EditText fenceKey;
     /**
      * Provides access to the Geofencing API.
      */
     private GeofencingClient mGeofencingClient;
-
     /**
      * The list of geofences used in this sample.
      */
     private ArrayList<Geofence> mGeofenceList;
-
     /**
      * Used when requesting to add or remove geofences.
      */
     private PendingIntent mGeofencePendingIntent;
-
     // Buttons for kicking off the process of adding or removing geofences.
     private Button mAddGeofencesButton;
     private Button mRemoveGeofencesButton;
-
     private PendingGeofenceTask mPendingGeofenceTask = PendingGeofenceTask.NONE;
 
     @Override
@@ -96,6 +92,10 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         // Get the UI widgets.
         mAddGeofencesButton = (Button) findViewById(R.id.add_geofences_button);
         mRemoveGeofencesButton = (Button) findViewById(R.id.remove_geofences_button);
+        latInput = findViewById(R.id.inputLat);
+        lngInput = findViewById(R.id.inputLng);
+        radiusInput = findViewById(R.id.inputRadius);
+        fenceKey = findViewById(R.id.fenceKey);
 
         // Empty list for storing geofences.
         mGeofenceList = new ArrayList<>();
@@ -103,12 +103,13 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         // Initially set the PendingIntent used in addGeofences() and removeGeofences() to null.
         mGeofencePendingIntent = null;
 
-        setButtonsEnabledState();
+        //setButtonsEnabledState();
 
         // Get the geofences used. Geofence data is hard coded in this sample.
-        populateGeofenceList();
+        //populateGeofenceList();
 
-       mGeofencingClient = LocationServices.getGeofencingClient(this);
+        mGeofencingClient = LocationServices.getGeofencingClient(this);
+
     }
 
     @Override
@@ -146,11 +147,33 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      * specified geofences. Handles the success or failure results returned by addGeofences().
      */
     public void addGeofencesButtonHandler(View view) {
+
+        double lat = 0d;
+        double lng = 0d;
+        int radius = 0;
+        try {
+            lat = Double.parseDouble(latInput.getText().toString());
+            lng = Double.parseDouble(lngInput.getText().toString());
+            radius = Integer.parseInt(radiusInput.getText().toString());
+        } catch (NumberFormatException ex) {
+            ex.printStackTrace();
+        }
+
+        Constants.lat = lat;
+        Constants.lng = lng;
+        Constants.radius = radius;
+
         if (!checkPermissions()) {
             mPendingGeofenceTask = PendingGeofenceTask.ADD;
             requestPermissions();
             return;
         }
+        String key = fenceKey.getText().toString();
+        if (!key.isEmpty() && !Constants.BAY_AREA_LANDMARKS.containsKey(key)) {
+            Constants.BAY_AREA_LANDMARKS.put(key, new LatLng(lat, lng));
+        }
+        Constants.initFences();
+        populateGeofenceList();
         addGeofences();
     }
 
@@ -179,7 +202,74 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             requestPermissions();
             return;
         }
-        removeGeofences();
+        //removeGeofences();
+        //removeRandomGeofence();
+        fenceSelection();
+        populateGeofenceList();
+    }
+
+    private void fenceSelection() {
+        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+            Toast.makeText(MainActivity.this, "No fences available to remove", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ArrayList<CharSequence> keys = new ArrayList<CharSequence>(Constants.BAY_AREA_LANDMARKS.keySet());
+        final CharSequence[] array = new CharSequence[keys.size()];
+        keys.toArray(array);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select fence key to remove")
+                .setSingleChoiceItems(array, -1, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        removeGeofence(array[which].toString());
+                        dialog.dismiss();
+                    }
+                }).create().show();
+    }
+
+    private void removeRandomGeofence() {
+        String key = "SFO";
+        for (Map.Entry<String, LatLng> entry : Constants.BAY_AREA_LANDMARKS.entrySet()) {
+            key = entry.getKey();
+            break;
+        }
+        removeGeofence(key);
+    }
+
+    private void removeGeofence(String key) {
+        if (!checkPermissions()) {
+            showSnackbar(getString(R.string.insufficient_permissions));
+            return;
+        }
+        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+            //mRemoveGeofencesButton.setEnabled(false);
+            mAddGeofencesButton.setEnabled(true);
+            //updateGeofencesAdded(false);
+            Toast.makeText(MainActivity.this, "No fences available to remove", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ArrayList<String> keysToRemove = new ArrayList<>();
+        keysToRemove.add(key);
+        final String finalKey = key;
+        mGeofencingClient.removeGeofences(keysToRemove).addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()) {
+                    Constants.BAY_AREA_LANDMARKS.remove(finalKey);
+                    Toast.makeText(MainActivity.this, "fence removed", Toast.LENGTH_SHORT).show();
+//                    if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+//                        mRemoveGeofencesButton.setEnabled(false);
+//                        mAddGeofencesButton.setEnabled(true);
+//                        updateGeofencesAdded(false);
+//                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "something went wrong. fence cannot be removed", Toast.LENGTH_SHORT).show();
+                    String errorMessage = GeofenceErrorMessages.getErrorString(MainActivity.this, task.getException());
+                    Log.e(TAG, errorMessage);
+                }
+            }
+        });
     }
 
     /**
@@ -199,18 +289,18 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     /**
      * Runs when the result of calling {@link #addGeofences()} and/or {@link #removeGeofences()}
      * is available.
+     *
      * @param task the resulting Task, containing either a result or error.
      */
     @Override
     public void onComplete(@NonNull Task<Void> task) {
         mPendingGeofenceTask = PendingGeofenceTask.NONE;
         if (task.isSuccessful()) {
-            updateGeofencesAdded(!getGeofencesAdded());
-            setButtonsEnabledState();
+            //updateGeofencesAdded(!getGeofencesAdded());
+            //setButtonsEnabledState();
 
-            int messageId = getGeofencesAdded() ? R.string.geofences_added :
-                    R.string.geofences_removed;
-            Toast.makeText(this, getString(messageId), Toast.LENGTH_SHORT).show();
+
+            Toast.makeText(this, getString(R.string.geofences_added), Toast.LENGTH_SHORT).show();
         } else {
             // Get the status code for the error and log it using a user-friendly message.
             String errorMessage = GeofenceErrorMessages.getErrorString(this, task.getException());
@@ -277,7 +367,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      */
     private void setButtonsEnabledState() {
         if (getGeofencesAdded()) {
-            mAddGeofencesButton.setEnabled(false);
             mRemoveGeofencesButton.setEnabled(true);
         } else {
             mAddGeofencesButton.setEnabled(true);
@@ -428,5 +517,12 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                 mPendingGeofenceTask = PendingGeofenceTask.NONE;
             }
         }
+    }
+
+    /**
+     * Tracks whether the user requested to add or remove geofences, or to do neither.
+     */
+    private enum PendingGeofenceTask {
+        ADD, REMOVE, NONE
     }
 }
