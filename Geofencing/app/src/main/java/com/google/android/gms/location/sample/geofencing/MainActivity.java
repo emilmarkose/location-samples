@@ -41,13 +41,18 @@ import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.sample.geofencing.db.DbUtility;
+import com.google.android.gms.location.sample.geofencing.db.FenceKeysModel;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Demonstrates how to create and remove geofences using the GeofencingApi. Uses an IntentService
@@ -61,8 +66,9 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity implements OnCompleteListener<Void> {
 
     private static final String TAG = MainActivity.class.getSimpleName();
-
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
+    private DbUtility utility = new DbUtility();
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private EditText latInput;
     private EditText lngInput;
     private EditText radiusInput;
@@ -108,7 +114,38 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         //populateGeofenceList();
 
         mGeofencingClient = LocationServices.getGeofencingClient(this);
+        loadAllFencesFromCache();
 
+    }
+
+    private void saveFenceInfoInCache(final String key, final double lat, final double lng) {
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                utility.addGeofence(MainActivity.this, key, lat, lng);
+            }
+        });
+    }
+
+    private void removeFenceInfoFromCache(final String key) {
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                utility.removeGeofence(MainActivity.this, key);
+            }
+        });
+    }
+
+    private void loadAllFencesFromCache() {
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                List<FenceKeysModel> geofences = utility.getGeofences(MainActivity.this);
+                for (FenceKeysModel model : geofences) {
+                    Constants.BAY_AREA_LANDMARKS.put(model.getKey(), new LatLng(model.getLat(), model.getLng()));
+                }
+            }
+        });
     }
 
     @Override
@@ -165,6 +202,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         String key = fenceKey.getText().toString();
         if (!key.isEmpty() && !Constants.BAY_AREA_LANDMARKS.containsKey(key)) {
             Constants.BAY_AREA_LANDMARKS.put(key, new LatLng(lat, lng));
+            saveFenceInfoInCache(key, lat, lng);
         }
         populateGeofenceList();
         addGeofences();
@@ -201,7 +239,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         //removeGeofences();
         //removeRandomGeofence();
         fenceSelection();
-        populateGeofenceList();
     }
 
     private void fenceSelection() {
@@ -253,6 +290,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             public void onComplete(@NonNull Task<Void> task) {
                 if (task.isSuccessful()) {
                     Constants.BAY_AREA_LANDMARKS.remove(finalKey);
+                    removeFenceInfoFromCache(finalKey);
                     Toast.makeText(MainActivity.this, "fence removed", Toast.LENGTH_SHORT).show();
 //                    if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
 //                        mRemoveGeofencesButton.setEnabled(false);
