@@ -82,7 +82,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     // Buttons for kicking off the process of adding or removing geofences.
     private Button mAddGeofencesButton;
     private Button mRemoveGeofencesButton;
-    private PendingGeofenceTask mPendingGeofenceTask = PendingGeofenceTask.NONE;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -90,8 +89,8 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         setContentView(R.layout.main_activity);
 
         // Get the UI widgets.
-        mAddGeofencesButton = (Button) findViewById(R.id.add_geofences_button);
-        mRemoveGeofencesButton = (Button) findViewById(R.id.remove_geofences_button);
+        mAddGeofencesButton = findViewById(R.id.add_geofences_button);
+        mRemoveGeofencesButton = findViewById(R.id.remove_geofences_button);
         latInput = findViewById(R.id.inputLat);
         lngInput = findViewById(R.id.inputLng);
         radiusInput = findViewById(R.id.inputRadius);
@@ -118,8 +117,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
 
         if (!checkPermissions()) {
             requestPermissions();
-        } else {
-            performPendingGeofenceTask();
         }
     }
 
@@ -162,7 +159,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         Constants.radius = radius;
 
         if (!checkPermissions()) {
-            mPendingGeofenceTask = PendingGeofenceTask.ADD;
             requestPermissions();
             return;
         }
@@ -199,7 +195,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      */
     public void removeGeofencesButtonHandler(View view) {
         if (!checkPermissions()) {
-            mPendingGeofenceTask = PendingGeofenceTask.REMOVE;
             requestPermissions();
             return;
         }
@@ -295,7 +290,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      */
     @Override
     public void onComplete(@NonNull Task<Void> task) {
-        mPendingGeofenceTask = PendingGeofenceTask.NONE;
         if (task.isSuccessful()) {
             //updateGeofencesAdded(!getGeofencesAdded());
             //setButtonsEnabledState();
@@ -428,16 +422,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                 .apply();
     }
 
-    /**
-     * Performs the geofencing task that was pending until location permission was granted.
-     */
-    private void performPendingGeofenceTask() {
-        if (mPendingGeofenceTask == PendingGeofenceTask.ADD) {
-            addGeofences();
-        } else if (mPendingGeofenceTask == PendingGeofenceTask.REMOVE) {
-            removeGeofences();
-        }
-    }
 
     /**
      * Return the current state of the permissions needed.
@@ -521,7 +505,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                 Log.i(TAG, "User interaction was cancelled.");
             } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.i(TAG, "Permission granted.");
-                performPendingGeofenceTask();
             } else {
                 // Permission denied.
 
@@ -549,7 +532,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                                 startActivity(intent);
                             }
                         });
-                mPendingGeofenceTask = PendingGeofenceTask.NONE;
             }
         }
     }
