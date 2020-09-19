@@ -97,6 +97,14 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         radiusInput = findViewById(R.id.inputRadius);
         fenceKey = findViewById(R.id.fenceKey);
 
+        latInput.setText(String.valueOf(Constants.lat));
+        lngInput.setText(String.valueOf(Constants.lng));
+        radiusInput.setText("100");
+        fenceKey.setText("key1");
+
+
+
+
         // Empty list for storing geofences.
         mGeofenceList = new ArrayList<>();
 
@@ -437,39 +445,42 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      * Return the current state of the permissions needed.
      */
     private boolean checkPermissions() {
-        int permissionState = ActivityCompat.checkSelfPermission(this,
+        int permissionFineLocation = ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION);
-        return permissionState == PackageManager.PERMISSION_GRANTED;
+
+        int permissionBackgroundLocation = ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        return (permissionFineLocation == PackageManager.PERMISSION_GRANTED) && (permissionBackgroundLocation == PackageManager.PERMISSION_GRANTED);
     }
 
     private void requestPermissions() {
-        boolean shouldProvideRationale =
-                ActivityCompat.shouldShowRequestPermissionRationale(this,
-                        Manifest.permission.ACCESS_FINE_LOCATION);
-
         // Provide an additional rationale to the user. This would happen if the user denied the
         // request previously, but didn't check the "Don't ask again" checkbox.
-        if (shouldProvideRationale) {
+        boolean shouldProvideRationaleForFineLocation =
+                ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.ACCESS_FINE_LOCATION);
+        boolean shouldProvideRationaleForBackgroundLocation =
+                ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+
+        final ArrayList<String> permissions = new ArrayList<String>();
+        if (shouldProvideRationaleForFineLocation)
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (shouldProvideRationaleForBackgroundLocation)
+            permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+
+        if (!permissions.isEmpty())
             Log.i(TAG, "Displaying permission rationale to provide additional context.");
-            showSnackbar(R.string.permission_rationale, android.R.string.ok,
-                    new View.OnClickListener() {
-                        @Override
-                        public void onClick(View view) {
-                            // Request permission
-                            ActivityCompat.requestPermissions(MainActivity.this,
-                                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                                    REQUEST_PERMISSIONS_REQUEST_CODE);
-                        }
-                    });
-        } else {
-            Log.i(TAG, "Requesting permission");
-            // Request permission. It's possible this can be auto answered if device policy
-            // sets the permission in a given state or the user denied the permission
-            // previously and checked "Never ask again".
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    REQUEST_PERMISSIONS_REQUEST_CODE);
-        }
+        showSnackbar(R.string.permission_rationale, android.R.string.ok,
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        // Request permission fro both Fine location and Background location
+                        ActivityCompat.requestPermissions(MainActivity.this,
+                                permissions.toArray(new String[0]),
+                                REQUEST_PERMISSIONS_REQUEST_CODE);
+                    }
+                });
     }
 
     /**
