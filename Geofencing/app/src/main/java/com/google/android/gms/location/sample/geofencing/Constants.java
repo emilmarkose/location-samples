@@ -26,8 +26,6 @@ import java.util.HashMap;
 
 final class Constants {
 
-    public static double lat = 8.524139;
-    public static double lng = 76.936638;
     public static int radius = 0;
 
 
@@ -56,10 +54,4 @@ final class Constants {
      */
     static final HashMap<String, LatLng> BAY_AREA_LANDMARKS = new HashMap<>();
 
-    public static void initFences() {
-        BAY_AREA_LANDMARKS.put("SFO", new LatLng(lat, lng));
-
-        // Googleplex.
-        BAY_AREA_LANDMARKS.put("GOOGLE", new LatLng(37.422611,-122.0840577));
-    }
 }

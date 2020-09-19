@@ -159,8 +159,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             ex.printStackTrace();
         }
 
-        Constants.lat = lat;
-        Constants.lng = lng;
         Constants.radius = radius;
 
         if (!checkPermissions()) {
@@ -172,7 +170,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         if (!key.isEmpty() && !Constants.BAY_AREA_LANDMARKS.containsKey(key)) {
             Constants.BAY_AREA_LANDMARKS.put(key, new LatLng(lat, lng));
         }
-        Constants.initFences();
         populateGeofenceList();
         addGeofences();
     }
@@ -185,6 +182,10 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     private void addGeofences() {
         if (!checkPermissions()) {
             showSnackbar(getString(R.string.insufficient_permissions));
+            return;
+        }
+        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+            Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -343,7 +344,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                     .setCircularRegion(
                             entry.getValue().latitude,
                             entry.getValue().longitude,
-                            Constants.GEOFENCE_RADIUS_IN_METERS
+                            Constants.radius
                     )
 
                     // Set the expiration duration of the geofence. This geofence gets automatically
@@ -395,7 +396,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      */
     private void showSnackbar(final int mainTextStringId, final int actionStringId,
                               View.OnClickListener listener) {
-        showSnackbar(getString(mainTextStringId),actionStringId,listener);
+        showSnackbar(getString(mainTextStringId), actionStringId, listener);
     }
 
     private void showSnackbar(final String msg, final int actionStringId,
@@ -476,13 +477,12 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                         Manifest.permission.ACCESS_FINE_LOCATION);
 
 
-
         // Provide an additional rationale to the user. This would happen if the user denied the
         // request previously, but didn't check the "Don't ask again" checkbox.
         if (shouldProvideRationale || shouldProvideRationaleForBgLocation) {
             Log.i(TAG, "Displaying permission rationale to provide additional context.");
             String msg = "Location permission is needed for core functionality";
-            if(shouldProvideRationaleForBgLocation) {
+            if (shouldProvideRationaleForBgLocation) {
                 msg = "Background Location permission is needed for core functionality";
             }
             showSnackbar(msg, android.R.string.ok,
