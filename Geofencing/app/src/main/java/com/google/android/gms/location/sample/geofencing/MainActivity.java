@@ -28,8 +28,6 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -117,26 +115,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
 
         mGeofencingClient = LocationServices.getGeofencingClient(this);
         loadAllFencesFromCache();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_options, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        Intent intent = new Intent(this, FenceViewActivity.class);
-        switch (item.getItemId()) {
-            case R.id.showMap:
-                startActivity(intent);
-                break;
-            case R.id.pickLocation:
-                startActivityForResult(intent, 100);
-                break;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
