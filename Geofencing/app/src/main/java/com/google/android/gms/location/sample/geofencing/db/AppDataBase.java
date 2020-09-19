@@ -6,7 +6,7 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
-@Database(entities = FenceKeysModel.class, version = 1, exportSchema = false)
+@Database(entities = FenceKeysModel.class, version = 2, exportSchema = false)
 abstract class AppDataBase extends RoomDatabase {
 
     public abstract FenceKeyDao fenceDao();

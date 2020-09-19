@@ -28,12 +28,15 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -43,14 +46,12 @@ import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.sample.geofencing.db.DbUtility;
 import com.google.android.gms.location.sample.geofencing.db.FenceKeysModel;
-import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -88,6 +89,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     // Buttons for kicking off the process of adding or removing geofences.
     private Button mAddGeofencesButton;
     private Button mRemoveGeofencesButton;
+    private ArrayList<FenceKeysModel> cachedGeofences = new ArrayList<>();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -115,14 +117,47 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
 
         mGeofencingClient = LocationServices.getGeofencingClient(this);
         loadAllFencesFromCache();
-
     }
 
-    private void saveFenceInfoInCache(final String key, final double lat, final double lng) {
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_options, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        Intent intent = new Intent(this, FenceViewActivity.class);
+        switch (item.getItemId()) {
+            case R.id.showMap:
+                startActivity(intent);
+                break;
+            case R.id.pickLocation:
+                startActivityForResult(intent, 100);
+                break;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (resultCode == RESULT_OK && requestCode == 100) {
+            if (data != null && data.getExtras() != null) {
+                Bundle extras = data.getExtras();
+                double lat = extras.getDouble("lat", 0);
+                double lng = extras.getDouble("lng", 0);
+                latInput.setText(lat + "");
+                lngInput.setText(lng + "");
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    private void saveFenceInfoInCache(final String key, final double lat, final double lng, final int radius) {
         executorService.execute(new Runnable() {
             @Override
             public void run() {
-                utility.addGeofence(MainActivity.this, key, lat, lng);
+                utility.addGeofence(MainActivity.this, key, lat, lng, radius);
             }
         });
     }
@@ -140,10 +175,9 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         executorService.execute(new Runnable() {
             @Override
             public void run() {
-                List<FenceKeysModel> geofences = utility.getGeofences(MainActivity.this);
-                for (FenceKeysModel model : geofences) {
-                    Constants.BAY_AREA_LANDMARKS.put(model.getKey(), new LatLng(model.getLat(), model.getLng()));
-                }
+                List<FenceKeysModel> list = utility.getGeofences(MainActivity.this);
+                cachedGeofences.clear();
+                cachedGeofences.addAll(list);
             }
         });
     }
@@ -181,31 +215,48 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      * specified geofences. Handles the success or failure results returned by addGeofences().
      */
     public void addGeofencesButtonHandler(View view) {
-
-        double lat = 0d;
-        double lng = 0d;
-        int radius = 0;
+        double lat;
+        double lng;
+        int radius;
         try {
             lat = Double.parseDouble(latInput.getText().toString());
             lng = Double.parseDouble(lngInput.getText().toString());
             radius = Integer.parseInt(radiusInput.getText().toString());
         } catch (NumberFormatException ex) {
+            Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
             ex.printStackTrace();
+            return;
         }
-
-        Constants.radius = radius;
+        String key = fenceKey.getText().toString();
 
         if (!checkPermissions()) {
             requestPermissions();
             return;
         }
-        String key = fenceKey.getText().toString();
-        if (!key.isEmpty() && !Constants.BAY_AREA_LANDMARKS.containsKey(key)) {
-            Constants.BAY_AREA_LANDMARKS.put(key, new LatLng(lat, lng));
-            saveFenceInfoInCache(key, lat, lng);
+        if (key.isEmpty()) {
+            Toast.makeText(this, "Please enter a key", Toast.LENGTH_SHORT).show();
+            return;
         }
-        populateGeofenceList();
-        addGeofences();
+        saveFenceInfoInCache(key, lat, lng, radius);
+        boolean keyExists = false;
+        for (FenceKeysModel model : cachedGeofences) {
+            if (model.getKey().equalsIgnoreCase(key)) {
+                keyExists = true;
+                break;
+            }
+        }
+        if (!keyExists) {
+            FenceKeysModel model = new FenceKeysModel();
+            model.setRadius(radius);
+            model.setKey(key);
+            model.setLng(lng);
+            model.setLat(lat);
+            cachedGeofences.add(model);
+            addToFenceList(key, lat, lng, radius);
+            addGeofences();
+        } else {
+            Toast.makeText(this, "Geofence with key " + key + " already exists", Toast.LENGTH_SHORT).show();
+        }
     }
 
     /**
@@ -218,7 +269,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             showSnackbar(getString(R.string.insufficient_permissions));
             return;
         }
-        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+        if (mGeofenceList.isEmpty()) {
             Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -236,17 +287,18 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             requestPermissions();
             return;
         }
-        //removeGeofences();
-        //removeRandomGeofence();
         fenceSelection();
     }
 
     private void fenceSelection() {
-        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
+        if (cachedGeofences.isEmpty()) {
             Toast.makeText(MainActivity.this, "No fences available to remove", Toast.LENGTH_SHORT).show();
             return;
         }
-        ArrayList<CharSequence> keys = new ArrayList<CharSequence>(Constants.BAY_AREA_LANDMARKS.keySet());
+        ArrayList<CharSequence> keys = new ArrayList<>();
+        for (FenceKeysModel model : cachedGeofences) {
+            keys.add(model.getKey());
+        }
         final CharSequence[] array = new CharSequence[keys.size()];
         keys.toArray(array);
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -260,24 +312,13 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                 }).create().show();
     }
 
-    private void removeRandomGeofence() {
-        String key = "SFO";
-        for (Map.Entry<String, LatLng> entry : Constants.BAY_AREA_LANDMARKS.entrySet()) {
-            key = entry.getKey();
-            break;
-        }
-        removeGeofence(key);
-    }
-
     private void removeGeofence(String key) {
         if (!checkPermissions()) {
             showSnackbar(getString(R.string.insufficient_permissions));
             return;
         }
-        if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
-            //mRemoveGeofencesButton.setEnabled(false);
+        if (cachedGeofences.isEmpty()) {
             mAddGeofencesButton.setEnabled(true);
-            //updateGeofencesAdded(false);
             Toast.makeText(MainActivity.this, "No fences available to remove", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -289,14 +330,9 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             @Override
             public void onComplete(@NonNull Task<Void> task) {
                 if (task.isSuccessful()) {
-                    Constants.BAY_AREA_LANDMARKS.remove(finalKey);
+                    removeKeyFromLocalList(finalKey);
                     removeFenceInfoFromCache(finalKey);
                     Toast.makeText(MainActivity.this, "fence removed", Toast.LENGTH_SHORT).show();
-//                    if (Constants.BAY_AREA_LANDMARKS.isEmpty()) {
-//                        mRemoveGeofencesButton.setEnabled(false);
-//                        mAddGeofencesButton.setEnabled(true);
-//                        updateGeofencesAdded(false);
-//                    }
                 } else {
                     Toast.makeText(MainActivity.this, "something went wrong. fence cannot be removed", Toast.LENGTH_SHORT).show();
                     String errorMessage = GeofenceErrorMessages.getErrorString(MainActivity.this, task.getException());
@@ -304,6 +340,16 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
                 }
             }
         });
+    }
+
+    private void removeKeyFromLocalList(String finalKey) {
+        for (int i = 0; i < cachedGeofences.size(); i++) {
+            FenceKeysModel model = cachedGeofences.get(i);
+            if (model.getKey().equalsIgnoreCase(finalKey)) {
+                cachedGeofences.remove(i);
+                break;
+            }
+        }
     }
 
     /**
@@ -329,10 +375,6 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     @Override
     public void onComplete(@NonNull Task<Void> task) {
         if (task.isSuccessful()) {
-            //updateGeofencesAdded(!getGeofencesAdded());
-            //setButtonsEnabledState();
-
-
             Toast.makeText(this, getString(R.string.geofences_added), Toast.LENGTH_SHORT).show();
         } else {
             // Get the status code for the error and log it using a user-friendly message.
@@ -360,37 +402,26 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
         return mGeofencePendingIntent;
     }
 
-    /**
-     * This sample hard codes geofence data. A real app might dynamically create geofences based on
-     * the user's location.
-     */
-    private void populateGeofenceList() {
-        for (Map.Entry<String, LatLng> entry : Constants.BAY_AREA_LANDMARKS.entrySet()) {
+    private void addToFenceList(String key, double lat, double lng, int radius) {
+        mGeofenceList.add(new Geofence.Builder()
+                // Set the request ID of the geofence. This is a string to identify this
+                // geofence.
+                .setRequestId(key)
 
-            mGeofenceList.add(new Geofence.Builder()
-                    // Set the request ID of the geofence. This is a string to identify this
-                    // geofence.
-                    .setRequestId(entry.getKey())
+                // Set the circular region of this geofence.
+                .setCircularRegion(lat, lng, radius)
 
-                    // Set the circular region of this geofence.
-                    .setCircularRegion(
-                            entry.getValue().latitude,
-                            entry.getValue().longitude,
-                            Constants.radius
-                    )
+                // Set the expiration duration of the geofence. This geofence gets automatically
+                // removed after this period of time.
+                .setExpirationDuration(Constants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
 
-                    // Set the expiration duration of the geofence. This geofence gets automatically
-                    // removed after this period of time.
-                    .setExpirationDuration(Constants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
+                // Set the transition types of interest. Alerts are only generated for these
+                // transition. We track entry and exit transitions in this sample.
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
+                        Geofence.GEOFENCE_TRANSITION_EXIT)
 
-                    // Set the transition types of interest. Alerts are only generated for these
-                    // transition. We track entry and exit transitions in this sample.
-                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
-                            Geofence.GEOFENCE_TRANSITION_EXIT)
-
-                    // Create the geofence.
-                    .build());
-        }
+                // Create the geofence.
+                .build());
     }
 
     /**

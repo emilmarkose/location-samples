@@ -15,13 +15,14 @@ public class DbUtility {
         return fenceDao.getAll();
     }
 
-    public void addGeofence(Context context, String key, double lat, double lng) {
+    public void addGeofence(Context context, String key, double lat, double lng, int radius) {
         FenceKeyDao fenceDao = getFenceDao(context);
         if (fenceDao.getFence(key).isEmpty()) {
             FenceKeysModel model = new FenceKeysModel();
             model.setKey(key);
             model.setLat(lat);
             model.setLng(lng);
+            model.setRadius(radius);
             fenceDao.add(model);
         }
     }

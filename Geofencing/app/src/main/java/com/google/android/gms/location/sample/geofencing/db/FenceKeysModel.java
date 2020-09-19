@@ -12,6 +12,15 @@ public class FenceKeysModel {
     private String key;
     private double lat = 0;
     private double lng = 0;
+    private int radius = 0;
+
+    public int getRadius() {
+        return radius;
+    }
+
+    public void setRadius(int radius) {
+        this.radius = radius;
+    }
 
     public int getId() {
         return id;
