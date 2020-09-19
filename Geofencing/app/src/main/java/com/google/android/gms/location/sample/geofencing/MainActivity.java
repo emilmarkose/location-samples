@@ -395,9 +395,14 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
      */
     private void showSnackbar(final int mainTextStringId, final int actionStringId,
                               View.OnClickListener listener) {
+        showSnackbar(getString(mainTextStringId),actionStringId,listener);
+    }
+
+    private void showSnackbar(final String msg, final int actionStringId,
+                              View.OnClickListener listener) {
         Snackbar.make(
                 findViewById(android.R.id.content),
-                getString(mainTextStringId),
+                msg,
                 Snackbar.LENGTH_INDEFINITE)
                 .setAction(getString(actionStringId), listener).show();
     }
@@ -439,25 +444,55 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
     private boolean checkPermissions() {
         int permissionState = ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION);
-        return permissionState == PackageManager.PERMISSION_GRANTED;
+
+        int permissionStateFroBgLocation = PackageManager.PERMISSION_GRANTED;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            permissionStateFroBgLocation = ActivityCompat.checkSelfPermission(this,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        }
+        return permissionState == PackageManager.PERMISSION_GRANTED
+                && permissionStateFroBgLocation == PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions() {
+
+        final String[] permissions;
+        boolean shouldProvideRationaleForBgLocation = false;
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            permissions = new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            };
+            shouldProvideRationaleForBgLocation = ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        } else {
+            permissions = new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            };
+        }
         boolean shouldProvideRationale =
                 ActivityCompat.shouldShowRequestPermissionRationale(this,
                         Manifest.permission.ACCESS_FINE_LOCATION);
 
+
+
         // Provide an additional rationale to the user. This would happen if the user denied the
         // request previously, but didn't check the "Don't ask again" checkbox.
-        if (shouldProvideRationale) {
+        if (shouldProvideRationale || shouldProvideRationaleForBgLocation) {
             Log.i(TAG, "Displaying permission rationale to provide additional context.");
-            showSnackbar(R.string.permission_rationale, android.R.string.ok,
+            String msg = "Location permission is needed for core functionality";
+            if(shouldProvideRationaleForBgLocation) {
+                msg = "Background Location permission is needed for core functionality";
+            }
+            showSnackbar(msg, android.R.string.ok,
                     new View.OnClickListener() {
                         @Override
                         public void onClick(View view) {
                             // Request permission
+
                             ActivityCompat.requestPermissions(MainActivity.this,
-                                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                                    permissions,
                                     REQUEST_PERMISSIONS_REQUEST_CODE);
                         }
                     });
@@ -467,7 +502,7 @@ public class MainActivity extends AppCompatActivity implements OnCompleteListene
             // sets the permission in a given state or the user denied the permission
             // previously and checked "Never ask again".
             ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    permissions,
                     REQUEST_PERMISSIONS_REQUEST_CODE);
         }
     }
